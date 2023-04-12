@@ -638,8 +638,8 @@ def main(eqn_name, var_reduction, use_lstm=False, T=0.5, **kwargs):
         _file.close()
 
 if __name__ == '__main__':
-    main('BarrierOption',  var_reduction=False, K=[47], B=[53],
-         option_type=['call', 'put'], barrier_type=['up_and_out', 'down_and_in'])
+    main('BarrierOption',  var_reduction=False, K=[47, 52], B=[46, 53],
+         option_type=['call', 'put'], barrier_type=['up_and_out', 'down_and_out', 'up_and_in', 'down_and_in'])
     main('LookbackOption', var_reduction=False, option_type=['call', 'put'])
 
 
