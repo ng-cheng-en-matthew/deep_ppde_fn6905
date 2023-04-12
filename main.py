@@ -1,5 +1,4 @@
 import os
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import tensorflow as tf
@@ -145,7 +144,6 @@ class FeedForwardSubNet(tf.keras.Model):
                 x = tf.nn.relu(x)
         return x
 
-
 ########## Section equation ####################
 class Equation:
     """Base class for defining the problem."""
@@ -209,106 +207,17 @@ class Equation:
         return gamma
 
 
-class ControlProblem(Equation):
-    """Example in Section 5.1"""
-    def __init__(self, config):
-        super(ControlProblem, self).__init__(config)
-        self.ppde_type = 'fully_nonlinear'   # fully nonlinear PPDE
-        self.x_init = 0
-        self.mu_low = -0.2
-        self.mu_high = 0.2
-        self.sig_low = 0.2
-        self.sig_high = 0.3
-        self.a_low = self.sig_low ** 2
-        self.a_high = self.sig_high ** 2
-
-    def b(self, x):
-        return tf.zeros_like(x)
-
-    def sigma(self, x):
-        return self.sig_low * tf.eye(self.config.dim,
-                batch_shape=[self.config.batch_size])
-
-    def sigma_inverse(self, x):
-        return tf.eye(self.config.dim,
-                  batch_shape=[self.config.batch_size]) / self.sig_low
-
-    def f(self, x, y, z, gamma):
-        # sum along the dimension axis
-        reduced_x = tf.reduce_mean(x, 2)
-        # trapezoidal rule
-        reduced_int = self.config.delta_t * (tf.reduce_sum(reduced_x,1)
-                        + tf.reduce_sum(reduced_x[:,1:-1], 1)) / 2
-        reduced_sin = tf.sin(reduced_x[:,-1] + reduced_int)
-        reduced_cos = tf.cos(reduced_x[:,-1] + reduced_int)
-        reduced_z = tf.reduce_sum(z,1)
-        reduced_gamma = tf.linalg.trace(gamma)
-        cancel = -self.a_low * reduced_gamma / 2
-        mu = tf.where(reduced_z>0, self.mu_low*reduced_z,
-                self.mu_high*reduced_z)
-        a = tf.where(reduced_gamma>0, self.a_high*reduced_gamma,
-                self.a_low*reduced_gamma) / 2
-        small_f = reduced_sin * tf.where(reduced_sin>0,
-                                reduced_x[:,-1] + self.mu_high,
-                                reduced_x[:,-1] + self.mu_low) \
-                    + tf.where(reduced_cos>0,
-                            self.a_low*reduced_cos/2,
-                            self.a_high*reduced_cos/2) / self.config.dim
-        return tf.expand_dims(cancel+mu+a+small_f, -1)
-
-    def phi(self, x):
-        # average along the dimension axis
-        reduced_x = tf.reduce_mean(x, 2)
-        # trapezoidal rule
-        reduced_int = self.config.delta_t * (tf.reduce_sum(reduced_x,1)
-                        + tf.reduce_sum(reduced_x[:,1:-1], 1)) / 2
-        return tf.expand_dims(tf.cos(reduced_x[:, -1]
-                + reduced_int), -1)
-
-
-class AsianOption(Equation):
-    """Example in Section 5.2"""
-    def __init__(self, config):
-        super(AsianOption, self).__init__(config)
-        self.ppde_type = 'linear'   # linear PPDE
-        self.x_init = 1
-        self.sig = 0.1
-        self.r = 0.01
-        self.K = 0.7
-
-    def b(self, x):
-        return self.r*x
-
-    def sigma(self, x):
-        return self.sig * tf.linalg.diag(x)
-
-    def sigma_inverse(self, x):
-        return tf.linalg.diag(tf.reciprocal(x)) / self.sig
-
-    def f(self, x, y, z, gamma):
-        return -self.r*y
-
-    def phi(self, x):
-        # average along the dimension axis
-        reduced_x = tf.reduce_mean(x, 2)
-        # trapezoidal rule
-        reduced_mean = self.config.delta_t*(tf.reduce_sum(reduced_x,1)\
-                + tf.reduce_sum(reduced_x[:,1:-1],1))/(2*self.config.T)
-        reduced_mean -= self.K
-        return tf.expand_dims(tf.where(reduced_mean>0,
-            reduced_mean, tf.zeros_like(reduced_mean)), -1)
-
-
 class BarrierOption(Equation):
-    """Example in Section 5.3"""
-    def __init__(self, config):
+    def __init__(self, config, **kwargs):
         super(BarrierOption, self).__init__(config)
         self.ppde_type = 'linear'   # linear PPDE
-        self.x_init = 1
-        self.sig = 0.1
-        self.r = 0.01
-        self.K = 0.7
-        self.B = 1.2
+        self.x_init = kwargs.get('x_init', 50)
+        self.sig = kwargs.get('sig', 0.2)
+        self.r = kwargs.get('r', 0.01)
+        self.K = kwargs.get('K', 47)
+        self.B = kwargs.get('B', 53)
+        self.option_type = kwargs.get('option_type', 'call')
+        self.barrier_type = kwargs.get('barrier_type', 'up_and_out')
 
     def b(self, x):
         return self.r*x
@@ -325,9 +234,53 @@ class BarrierOption(Equation):
     def phi(self, x):
         # average along the dimension axis
         reduced_x = tf.reduce_mean(x, 2)
-        reduced_term = reduced_x[:, -1] - self.K
-        up_flag = self.B - tf.reduce_max(reduced_x, 1)
+        reduced_term = ((reduced_x[:, -1] - self.K) if self.option_type == 'call'
+                        else (- reduced_x[:, -1] + self.K))
+
+        if self.barrier_type == 'up_and_out':
+            up_flag = self.B - tf.reduce_max(reduced_x, 1)
+
+        elif self.barrier_type == 'up_and_in':
+            up_flag = tf.reduce_max(reduced_x, 1) - self.B
+
+        elif self.barrier_type == 'down_and_in':
+            up_flag = self.B - tf.reduce_min(reduced_x, 1)
+
+        else: # self.barrier_type == 'down_and_out':
+            up_flag = tf.reduce_min(reduced_x, 1) - self.B
+
         return tf.expand_dims(tf.where(tf.math.logical_and(up_flag > 0, reduced_term > 0), reduced_term,
+            tf.zeros_like(reduced_term)), -1)
+
+
+class LookbackOption(Equation):
+    def __init__(self, config, **kwargs):
+        super(LookbackOption, self).__init__(config)
+        self.ppde_type = 'linear'   # linear PPDE
+        self.x_init = kwargs.get('x_init', 50)
+        self.sig = kwargs.get('sig', 0.2)
+        self.r = kwargs.get('r', 0.01)
+        self.option_type = kwargs.get('option_type', 'call')
+
+    def b(self, x):
+        return self.r*x
+
+    def sigma(self, x):
+        return self.sig * tf.linalg.diag(x)
+
+    def sigma_inverse(self, x):
+        return tf.linalg.diag(tf.reciprocal(x)) / self.sig
+
+    def f(self, x, y, z, gamma):
+        return -self.r*y
+
+    def phi(self, x):
+        # average along the dimension axis
+        reduced_x = tf.reduce_mean(x, 2)
+        reduced_term = ((reduced_x[:, -1] - tf.reduce_min(reduced_x, 1)) if self.option_type == 'call'
+                        else (- reduced_x[:, -1] + tf.reduce_max(reduced_x, 1)))
+
+        return tf.expand_dims(tf.where(reduced_term > 0, reduced_term,
             tf.zeros_like(reduced_term)), -1)
 
 
@@ -586,70 +539,107 @@ def simulate_close_form(eqn_name, T=0.1):
             print(d, T, N, run, v0, t_1 - t_0)
 
 
-def main(eqn_name, var_reduction, use_lstm=False, T=0.1):
+def main(eqn_name, var_reduction, use_lstm=False, T=0.5, **kwargs):
+    '''
+    Parameters:
+    ===========
+        - eqn_name (str): Either "BarrierOption" or "LookbackOption"
+        - var_reduction (bool):  Whether to use variance reduction. Default False.
+        - use_lstm (bool): Whether to use LSTM. Default False.
+        - T (float): Time to maturity of option
+        - kwargs: contains
+            - K (list): strike price of barrier option
+            - B (list): barrier of barrier option
+            - option_type (list): type of option (call/put)
+            - barrier_type (list): type of option (up_and_out/up_and_in/down_and_in/down_and_out)
+            for barrier option
+    '''
+    # define configuration
     N = int(T/.01)
-    # float64 for a better precision, float32 for smaller memory
     dtype = tf.float32
-
     batch_size = 256
     train_steps = 900
     lr_boundaries = [2*train_steps//3, 5*train_steps//6]
     lr_values = [0.1, 0.01, 0.001]
+    y_neurons = [11, 11, 1]  # [d+10, d+10, 1]
+    z_neurons = [11, 11, 1]  # [d+10, d+10, d]
+    g_neurons = [11, 11, 1]
+    config = Config(1, T, N, dtype, batch_size, train_steps,
+                    lr_boundaries, lr_values, eqn_name, var_reduction,
+                    y_neurons, z_neurons, g_neurons, use_lstm=use_lstm)
 
-    # var_reduction = False
-
+    # output file name
     expr_name = 'logs/'
-    if not var_reduction: expr_name += 'no_'
+    if not var_reduction:
+        expr_name += 'no_'
+
     expr_name += 'var_reduction_'
-    if use_lstm: expr_name += 'lstm_'
+
+    if use_lstm:
+        expr_name += 'lstm_'
+
     expr_name += eqn_name
     expr_name += f'_T_{T}.csv'
 
     _file = open(expr_name, 'w')
-    _file.write('d,T,N,run,y0,runtime\n')
 
-    # not doing d > 1 for large N
-    d_arrays = [1, 10, 100] if N < 50 else [1]
-    for d in d_arrays:
-        y_neurons = [d+10, d+10, 1]
-        z_neurons = [d+10, d+10, d]
-        g_neurons = [d+10, d+10, d*d]
+    if eqn_name == 'BarrierOption':
+        _file.write('d,T,N,run,option_type,barrier_type,K,B,y0,runtime\n')
 
-        config = Config(d, T, N, dtype, batch_size, train_steps,
-                    lr_boundaries, lr_values, eqn_name, var_reduction,
-                    y_neurons, z_neurons, g_neurons, use_lstm=use_lstm)
-        eqn = globals()[eqn_name](config)
+        # for each combination of barrier option type, strike and barrier
+        for option_type in kwargs['option_type']:
+            for barrier_type in kwargs['barrier_type']:
+                for K in kwargs['K']:
+                    for B in kwargs['B']:
+                        eqn = BarrierOption(config, option_type=option_type,
+                                            barrier_type=barrier_type, K=K, B=B)
 
-        # 10 independent runs
-        for run in range(10):
-            # run on CPU to obtain reproducible results
-            tf.random.set_seed(run)
+                        # 10 independent runs
+                        for run in range(10):
+                            # run on CPU to obtain reproducible results
+                            tf.random.set_seed(run)
 
-            ppde_solver = PPDESolver(config, eqn)
-            t_0 = time.time()
-            ppde_solver.train()
-            ppde_solver.plt_stats()
-            t_1 = time.time()
-            _file.write('%i, %f, %i, %i, %f, %f\n'
-                        % (d, T, N, run, ppde_solver.v0, t_1 - t_0))
-            print(d, T, N, run, ppde_solver.v0, t_1 - t_0)
-            del ppde_solver
-        del config, eqn
-    _file.close()
+                            ppde_solver = PPDESolver(config, eqn)
+                            t_0 = time.time()
+                            ppde_solver.train()
+                            ppde_solver.plt_stats()
+                            t_1 = time.time()
+                            _file.write('%i, %f, %i, %i, %s, %s, %f, %f, %f, %f\n'
+                                        % (d, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0))
+                            print(d, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
+                            del ppde_solver
+                        del eqn
+        del config
+        _file.close()
+
+    elif eqn_name == 'LookbackOption':
+        _file.write('d,T,N,run,option_type,y0,runtime\n')
+
+        # for each combination of barrier option type, strike and barrier
+        for option_type in kwargs['option_type']:
+            eqn = LookbackOption(config, option_type=option_type)
+
+            # 10 independent runs
+            for run in range(10):
+                # run on CPU to obtain reproducible results
+                tf.random.set_seed(run)
+
+                ppde_solver = PPDESolver(config, eqn)
+                t_0 = time.time()
+                ppde_solver.train()
+                ppde_solver.plt_stats()
+                t_1 = time.time()
+                _file.write('%i, %f, %i, %i, %s, %f, %f\n'
+                            % (d, T, N, run, option_type, ppde_solver.v0, t_1 - t_0))
+                print(d, T, N, run, option_type, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
+                del ppde_solver
+            del eqn
+        del config
+        _file.close()
 
 if __name__ == '__main__':
-    simulate_close_form('AsianOption', T=1)
-    simulate_close_form('AsianOption')
-    simulate_close_form('BarrierOption')
-    # choice of ControlProblem, AsianOption, and BarrierOption
-    # for other problems, add a new class under Section equation
-    main('AsianOption',    var_reduction=False, use_lstm=True, T=1)
-    main('AsianOption',    var_reduction=False, use_lstm=True)
-    main('BarrierOption',  var_reduction=False, use_lstm=True)
-    main('ControlProblem', var_reduction=True,  use_lstm=True)
-    main('ControlProblem', var_reduction=False, use_lstm=True)
-    main('AsianOption',    var_reduction=False, T=1)
-    main('AsianOption',    var_reduction=False)
-    main('BarrierOption',  var_reduction=False)
-    main('ControlProblem', var_reduction=True)
-    main('ControlProblem', var_reduction=False)
+    main('BarrierOption',  var_reduction=False, K=[47], B=[53],
+         option_type=['call', 'put'], barrier_type=['up_and_out', 'down_and_in'])
+    main('LookbackOption', var_reduction=False, option_type=['call', 'put'])
+
+
