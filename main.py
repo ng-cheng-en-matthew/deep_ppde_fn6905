@@ -605,8 +605,8 @@ def main(eqn_name, var_reduction, use_lstm=False, T=0.5, **kwargs):
                             ppde_solver.plt_stats()
                             t_1 = time.time()
                             _file.write('%i, %f, %i, %i, %s, %s, %f, %f, %f, %f\n'
-                                        % (d, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0))
-                            print(d, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
+                                        % (1, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0))
+                            print(1, T, N, run, option_type, barrier_type, K, B, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
                             del ppde_solver
                         del eqn
         del config
@@ -630,8 +630,8 @@ def main(eqn_name, var_reduction, use_lstm=False, T=0.5, **kwargs):
                 ppde_solver.plt_stats()
                 t_1 = time.time()
                 _file.write('%i, %f, %i, %i, %s, %f, %f\n'
-                            % (d, T, N, run, option_type, ppde_solver.v0, t_1 - t_0))
-                print(d, T, N, run, option_type, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
+                            % (1, T, N, run, option_type, ppde_solver.v0, t_1 - t_0))
+                print(1, T, N, run, option_type, ppde_solver.v0, t_1 - t_0, ppde_solver.v0, t_1 - t_0)
                 del ppde_solver
             del eqn
         del config
