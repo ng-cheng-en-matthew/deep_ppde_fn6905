@@ -269,7 +269,7 @@ def Create_paths(i, M):
     return np.array(path, dtype=np.float32)
 
 M = 256 # number of samples in a batch
-T = 0.1 # terminal time
+T = 0.5 # terminal time
 dt = 0.01 # detla_t = 0.01, 0.005, 0.002, 0.001
 steps = int(T/dt) # number of time steps
 
