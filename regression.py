@@ -226,7 +226,7 @@ batch_size = 10000
 T = 0.5
 for which_type in ['xiaolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
     _file = open(f'logs/{which_type}_T_{T}.csv', 'w')
-    _file.write('d,T,N,run,y0,runtime\n')
+    _file.write('d,T,N,run,K,B,y0,runtime\n')
     print(which_type)
 
     for d in [1]:
@@ -250,7 +250,7 @@ for which_type in ['xiaolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiao
 
 for which_type in ['xiaolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
     _file = open(f'logs/no_var_reduction_{which_type}_T_{T}.csv', 'w')
-    _file.write('d,T,N,run,y0,runtime\n')
+    _file.write('d,T,N,run,K,B,y0,runtime\n')
     print(which_type)
 
     for d in [1]:#, [1, 10, 100]:

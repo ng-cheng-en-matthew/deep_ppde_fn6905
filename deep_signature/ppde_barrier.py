@@ -106,7 +106,7 @@ if __name__ == "__main__":
         # create output file
         logfile = f"logs/signature_barrier_{args.T}.csv"
         _file = open(logfile, 'w')
-        _file.write('d,T,N,run,y0,runtime\n')
+        _file.write('d,T,N,run,K,B,y0,runtime\n')
 
         # for each strike and barrier
         for K in [47]:# [47, 52]:
@@ -147,7 +147,7 @@ if __name__ == "__main__":
         # create output file
         logfile = f"logs/signature_lookback_{args.T}.csv"
         _file = open(logfile, 'w')
-        _file.write('d,T,N,run,y0,runtime\n')
+        _file.write('d,T,N,run,option_type,y0,runtime\n')
 
         # for each option type
         for option_type in ['call']: #['call', 'put']:

@@ -285,7 +285,7 @@ for which_type in [ 'galerkin_asian', 'galerkin_barrier', 'galerkin_control' ]:
 
     print(which_type)
     _file = open(f'logs/{which_type}_T_{T}.csv', 'w')
-    _file.write('d,T,N,run,y0,runtime\n')
+    _file.write('d,T,N,run,K,B,y0,runtime\n')
 
     for d in [1]: #[1, 10]:
 
