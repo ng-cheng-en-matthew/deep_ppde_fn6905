@@ -4,7 +4,7 @@ import time
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
-def simulate(ppde_type, t, n, d, sde, phi, f, batch_size):
+def simulate(ppde_type, t, n, d, sde, phi, f, batch_size, **kwargs):
     x, feature, dw = sde(d, batch_size, n-1)
 
     for i in range(n):
@@ -22,7 +22,7 @@ def simulate(ppde_type, t, n, d, sde, phi, f, batch_size):
 
         if i == 0:
             # d x 1 dimensional Y
-            Ytarget = phi(xnext, featurenext)
+            Ytarget = phi(xnext, featurenext, K=kwargs.get('K', 47), B=kwargs.get('B', 53))
         else:
             if i == n-1:
                 # at t1, feature can be written as a function of xnow and hence,
@@ -106,7 +106,7 @@ def doReg(Ymat, Xmat):
     return np.matmul( XXinv, XY )
 
 
-def phi(x, feature):
+def phi(x, feature, **kwargs):
     if which_type == 'xiaolu_control':
         x = np.mean(x, axis=1)
         feature = np.mean(feature, axis=1)
@@ -117,7 +117,7 @@ def phi(x, feature):
         feature = np.mean(feature, axis=1, keepdims=True)
         return np.where( feature-K>0, feature-K, np.zeros_like(feature) )
     elif which_type == 'xiaolu_barrier':
-        K, B = 0.7, 1.2
+        K, B = kwargs.get('K', 47), kwargs.get('B', 53)
         # average along the dimension axis
         x = np.mean(x, axis=1, keepdims=True)
         up_flag = B - feature
@@ -163,7 +163,7 @@ def sigma_inverse(_d, batch_size, x):
         return 1 / sig_low * np.stack([np.eye(_d)]*batch_size, axis=0)
 
     elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
-        sig = 0.1
+        sig = 0.2
         # return 1 / sig * np.diag(np.reciprocal(x))
 
         return 1 / sig * np.stack( [np.diag(np.reciprocal(x[i])) for i in range(batch_size)], axis=0 )
@@ -179,7 +179,7 @@ def sigma(_d, batch_size, x):
         # np.eye creates identity matrix
         return sig_low * np.stack([np.eye(_d)]*batch_size, axis=0)
     elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
-        sig = 0.1
+        sig = 0.2
         # return sig * np.diag(x)
         return sig * np.stack( [np.diag(x[i]) for i in range(batch_size)], axis=0 )
 
@@ -188,7 +188,7 @@ def init_x():
     if which_type == 'xiaolu_control':
         return 0
     elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
-        return 1
+        return 50
 
 
 def sde(_d, batch_size, n):
@@ -223,47 +223,51 @@ def sde(_d, batch_size, n):
 # -------------------- main script starts heres --------------------------------
 batch_size = 10000
 
-T = 0.1
-for which_type in [ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
+T = 0.5
+for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
     _file = open(f'logs/{which_type}_T_{T}.csv', 'w')
     _file.write('d,T,N,run,y0,runtime\n')
     print(which_type)
 
     for d in [1]:
         N = int(T / .01)
-        for run in range(10):
-            t_0 = time.time()
-            if which_type == 'xiaolu_control':
-                y0 = simulate('fully-nonlinear_var_reduction', T, N, d, sde, phi, f, batch_size)
-            elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
-                y0 = simulate('semilinear_var_reduction', T, N, d, sde, phi, f, batch_size)
-            t_1 = time.time()
+        for K in [47,52]:
+            for B in [46, 53]:
+                for run in range(10):
+                    t_0 = time.time()
+                    if which_type == 'xiaolu_control':
+                        y0 = simulate('fully-nonlinear_var_reduction', T, N, d, sde, phi, f, batch_size, K=K, B=B)
+                    elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
+                        y0 = simulate('semilinear_var_reduction', T, N, d, sde, phi, f, batch_size, K=K, B=B)
+                    t_1 = time.time()
 
-            _file.write('%i, %f, %i, %i, %f, %f\n'
-                        % (d, T, N, run, y0[0,0], t_1 - t_0))
-            _file.flush()
-            print(d, T, N, run, y0[0,0], t_1 - t_0)
+                    _file.write('%i, %f, %i, %i, %f, %f\n'
+                                % (d, T, N, run, y0[0,0], t_1 - t_0))
+                    _file.flush()
+                    print(d, T, N, run, y0[0,0], t_1 - t_0)
 
     _file.close()
 
-for which_type in [ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
+for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
     _file = open(f'logs/no_var_reduction_{which_type}_T_{T}.csv', 'w')
     _file.write('d,T,N,run,y0,runtime\n')
     print(which_type)
 
-    for d in [1, 10, 100]:
+    for d in [1]:#, [1, 10, 100]:
         N = int(T / .01)
-        for run in range(10):
-            t_0 = time.time()
-            if which_type == 'xiaolu_control':
-                y0 = simulate('fully-nonlinear', T, N, d, sde, phi, f, batch_size)
-            elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
-                y0 = simulate('semilinear', T, N, d, sde, phi, f, batch_size)
-            t_1 = time.time()
+        for K in [47,52]:
+            for B in [46, 53]:
+                for run in range(10):
+                    t_0 = time.time()
+                    if which_type == 'xiaolu_control':
+                        y0 = simulate('fully-nonlinear', T, N, d, sde, phi, f, batch_size, K=K, B=B)
+                    elif which_type == 'xiaolu_barrier' or which_type == 'xiaolu_asian':
+                        y0 = simulate('semilinear', T, N, d, sde, phi, f, batch_size, K=K, B=B)
+                    t_1 = time.time()
 
-            _file.write('%i, %f, %i, %i, %f, %f\n'
-                        % (d, T, N, run, y0[0,0], t_1 - t_0))
-            _file.flush()
-            print(d, T, N, run, y0[0,0], t_1 - t_0)
+                    _file.write('%i, %f, %i, %i, %f, %f\n'
+                                % (d, T, N, run, y0[0,0], t_1 - t_0))
+                    _file.flush()
+                    print(d, T, N, run, y0[0,0], t_1 - t_0)
 
     _file.close()
