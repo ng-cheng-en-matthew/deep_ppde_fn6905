@@ -5,7 +5,7 @@ import tensorflow.compat.v1 as tf
 import time as ttt
 import os
 import pprint
-import keras.backend as K
+import keras.backend as kb
 from tensorflow.compat.v1.keras.backend import set_session
 from keras.models import Sequential
 from keras.layers import Dense, Activation,LSTM
@@ -25,7 +25,7 @@ def loss_function(time,path, M, **kwargs):
     # input_x = tf.squeeze(input_x, axis=[1])
     input_x = path[:, 0, :]
     input_t = tf.slice(time, [0,0], [M,1])
-    inputt_f = K.concatenate([input_x, input_t, a])
+    inputt_f = kb.concatenate([input_x, input_t, a])
     f = NN(inputt_f)
 
     partial_x_f_list = []
@@ -36,7 +36,7 @@ def loss_function(time,path, M, **kwargs):
         delta = 0.01*inputt_f[:, ii]
         # this is to prevent zero bump_i
         bump_i = tf.where( delta>0, tf.maximum(delta, 1e-5), tf.minimum(delta, -1e-5))
-        inputt_up = K.concatenate([
+        inputt_up = kb.concatenate([
                         inputt_f[:,:ii],
                         1.01*tf.expand_dims(inputt_f[:,ii], -1),
                         inputt_f[:,(ii+1):] ])
@@ -48,7 +48,7 @@ def loss_function(time,path, M, **kwargs):
             delta = 0.01*inputt_f[:, jj]
             # this is to prevent zero bump_j
             bump_j = tf.where( delta>0, tf.maximum(delta, 1e-5), tf.minimum(delta, -1e-5))
-            inputt_down = K.concatenate([
+            inputt_down = kb.concatenate([
                             inputt_f[:,:jj],
                             0.99*tf.expand_dims(inputt_f[:,jj], -1),
                             inputt_f[:,(jj+1):] ])
@@ -62,13 +62,13 @@ def loss_function(time,path, M, **kwargs):
     ##. Next LSTM cell
     input_x_reshape = tf.reshape(input_x, (M,1,d))
     input_t_reshape = tf.reshape(input_t, (M,1,1))
-    inputt = K.concatenate([input_x_reshape, input_t_reshape])
+    inputt = kb.concatenate([input_x_reshape, input_t_reshape])
     a, _, c = LSTM_cell(inputt, initial_state = [a, c])
 
     ##.   calculate time derivative
     input_t_time = tf.slice(time, [0, 1], [M, 1])
     # input_t_time = K.slice(time, [0, 1], [M, 1])
-    inputt_time = K.concatenate([input_x, input_t_time, a])
+    inputt_time = kb.concatenate([input_x, input_t_time, a])
     f_flat = NN(inputt_time)
     partial_t_f = (f_flat - f)/dt
 
@@ -84,7 +84,7 @@ def loss_function(time,path, M, **kwargs):
         # input_x = tf.squeeze(input_x, axis=[1])
         input_x = path[:, i, :]
         input_t = tf.slice(time, [0,i], [M,1])
-        inputt_f = K.concatenate([input_x, input_t, a])
+        inputt_f = kb.concatenate([input_x, input_t, a])
         f = NN(inputt_f)
 
         partial_x_f_list = []
@@ -95,7 +95,7 @@ def loss_function(time,path, M, **kwargs):
             delta = 0.01*inputt_f[:, ii]
             # this is to prevent zero bump_j
             bump_i = tf.where( delta>0, tf.maximum(delta, 1e-5), tf.minimum(delta, -1e-5))
-            inputt_up = K.concatenate([
+            inputt_up = kb.concatenate([
                             inputt_f[:,:ii],
                             1.01*tf.expand_dims(inputt_f[:,ii], -1),
                             inputt_f[:,(ii+1):] ])
@@ -107,7 +107,7 @@ def loss_function(time,path, M, **kwargs):
                 delta = 0.01*inputt_f[:, jj]
                 # this is to prevent zero bump_j
                 bump_j = tf.where( delta>0, tf.maximum(delta, 1e-5), tf.minimum(delta, -1e-5))
-                inputt_down = K.concatenate([
+                inputt_down = kb.concatenate([
                                 inputt_f[:,:jj],
                                 0.99*tf.expand_dims(inputt_f[:,jj], -1),
                                 inputt_f[:,(jj+1):] ])
@@ -121,13 +121,13 @@ def loss_function(time,path, M, **kwargs):
         ##. Next LSTM cell
         input_x_reshape = tf.reshape(input_x, (M,1,d))
         input_t_reshape = tf.reshape(input_t, (M,1,1))
-        inputt = K.concatenate([input_x_reshape, input_t_reshape])
+        inputt = kb.concatenate([input_x_reshape, input_t_reshape])
         a, _, c = LSTM_cell(inputt, initial_state = [a, c])
 
         ##. calculate time derivative
         input_t_time = tf.slice(time, [0, i+1], [M, 1])
         # input_t_time = K.slice(time, [0, i+1], [M, 1])
-        inputt_time = K.concatenate([input_x, input_t_time, a])
+        inputt_time = kb.concatenate([input_x, input_t_time, a])
         f_flat = NN(inputt_time)
         partial_t_f = (f_flat - f)/dt
 
@@ -222,7 +222,7 @@ def init_x():
         return 0.0
     elif which_type == 'galerkin_barrier' or which_type == 'galerkin_asian' \
             or which_type == 'barrier_nonlinear' or which_type == 'asian_nonlinear':
-        return 50
+        return 50.0
 
 
 def b(x):
@@ -281,7 +281,7 @@ steps = int(T/dt) # number of time steps
 
 Epoch = 1000
 
-for which_type in [ 'galerkin_asian', 'galerkin_barrier', 'galerkin_control' ]:
+for which_type in [ 'galerkin_barrier']:
 
     print(which_type)
     _file = open(f'logs/{which_type}_T_{T}.csv', 'w')
