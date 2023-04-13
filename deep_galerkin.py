@@ -15,7 +15,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 tf.disable_v2_behavior()
 
-def loss_function(time,path, M):
+def loss_function(time,path, M, **kwargs):
 
     a = tf.Variable(tf.zeros([M, n_a]), trainable=False)
     c = tf.Variable(tf.zeros([M, n_a]), trainable=False)
@@ -137,14 +137,14 @@ def loss_function(time,path, M):
 
     #############################################################################
     ##. Terminal cost
-    Loss += tf.reduce_sum( tf.square( f-phi(path) ) )*steps
+    Loss += tf.reduce_sum( tf.square( f-phi(path, K=kwargs.get('K', 47), B=kwargs.get('B', 53)) ) )*steps
 
     solution = f
     # return Loss/M/steps, solution, time_derivative, space_derivative, space_2nd_derivative
     return Loss/M/steps, solution
 
 
-def phi(apath):
+def phi(apath, **kwargs):
     '''
     Givin a path, it outputs the terminal condition
     '''
@@ -155,7 +155,7 @@ def phi(apath):
         reduced_int = dt * ( tf.reduce_sum(reduced_x, 1) + tf.reduce_sum(reduced_x[:,1:-1], 1) ) / 2
         return tf.cos(reduced_x[:, -1] + reduced_int)
     elif which_type == 'galerkin_barrier':
-        K, B = 0.7, 1.2
+        K, B = kwargs.get('K', 47), kwargs.get('B', 53)
         # first average along the dimension axis
         reduced_x = tf.reduce_mean(apath, 2)
         reduced_term = reduced_x[:, -1] - K
@@ -197,7 +197,7 @@ def ppde(u, u_t, u_x, u_xx, apath):
         return tf.squeeze(u_t) + mu + a + small_f
     elif which_type == 'galerkin_barrier' or which_type == 'galerkin_asian':
         r = 0.01
-        sig = 0.1
+        sig = 0.2
         x = apath[:,-1,:]
         return tf.squeeze(u_t) + tf.squeeze(tf.matmul(tf.expand_dims(r*x, -1), \
                         tf.expand_dims(u_x, -1), transpose_a=True)) \
@@ -222,7 +222,7 @@ def init_x():
         return 0.0
     elif which_type == 'galerkin_barrier' or which_type == 'galerkin_asian' \
             or which_type == 'barrier_nonlinear' or which_type == 'asian_nonlinear':
-        return 1.0
+        return 50
 
 
 def b(x):
@@ -245,7 +245,7 @@ def sigma(x):
         # return sig_low * tf.eye( _d, batch_shape = [batch_size] )
         return sig_low
     elif which_type == 'galerkin_barrier' or which_type == 'galerkin_asian':
-        sig = 0.1
+        sig = 0.2
         return sig*x
 
 
@@ -287,62 +287,63 @@ for which_type in [ 'galerkin_asian', 'galerkin_barrier', 'galerkin_control' ]:
     _file = open(f'logs/{which_type}_T_{T}.csv', 'w')
     _file.write('d,T,N,run,y0,runtime\n')
 
-    for d in [1, 10]:
+    for d in [1]: #[1, 10]:
 
         # input time and path as placeholders
         path = tf.placeholder(dtype=tf.float32, shape=[M,steps+1,d])
         time = tf.placeholder(dtype = tf.float32, shape = [M, steps +1 + 1]) # extra after T
+        for K in [47, 52]:
+            for B in [46, 53]:
+                for run in range(10):
+                    with tf.Session() as sess:
 
-        for run in range(10):
-            with tf.Session() as sess:
+                        n_a = d+10 # number of hidden neurons in the LSTM network
+                        LSTM_cell = LSTM(n_a, return_state = True) # This is used to capture the long term dependency
 
-                n_a = d+10 # number of hidden neurons in the LSTM network
-                LSTM_cell = LSTM(n_a, return_state = True) # This is used to capture the long term dependency
+                        # This feedforward neural network is used to compute the derivatives.
+                        # input dimension is (1+1+n_a) = (space, time, path (which is characterized by n_a hidden neurons))
+                        NN = Sequential([
+                            Dense(d+10, input_shape=(1+d+n_a,)),
+                            Activation('tanh'),
+                            Dense(d+10),
+                            Activation('tanh'),
+                            Dense(1)
+                        ])
 
-                # This feedforward neural network is used to compute the derivatives.
-                # input dimension is (1+1+n_a) = (space, time, path (which is characterized by n_a hidden neurons))
-                NN = Sequential([
-                    Dense(d+10, input_shape=(1+d+n_a,)),
-                    Activation('tanh'),
-                    Dense(d+10),
-                    Activation('tanh'),
-                    Dense(1)
-                ])
+                        loss, solution = loss_function(time, path, M, K=K, B=B)
 
-                loss, solution = loss_function(time, path, M)
+                        global_step = tf.Variable(0, trainable=False)
+                        starter_learning_rate = 0.01
+                        # exponential decay learning rate
+                        learning_rate = tf.maximum(tf.train.exponential_decay(starter_learning_rate, global_step, \
+                            50, 0.98, staircase=True), tf.constant(0.00001))
+                        # adam optimizer
+                        optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
+                        gvs = optimizer.compute_gradients(loss)
+                        capped_gvs = [(tf.clip_by_norm(grad, 5.) if grad is not None else None, var) for grad, var in gvs]
+                        train_op = optimizer.apply_gradients(capped_gvs, global_step=global_step)
 
-                global_step = tf.Variable(0, trainable=False)
-                starter_learning_rate = 0.01
-                # exponential decay learning rate
-                learning_rate = tf.maximum(tf.train.exponential_decay(starter_learning_rate, global_step, \
-                    50, 0.98, staircase=True), tf.constant(0.00001))
-                # adam optimizer
-                optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
-                gvs = optimizer.compute_gradients(loss)
-                capped_gvs = [(tf.clip_by_norm(grad, 5.) if grad is not None else None, var) for grad, var in gvs]
-                train_op = optimizer.apply_gradients(capped_gvs, global_step=global_step)
+                        init = tf.global_variables_initializer()
+                        sess.run(init)
 
-                init = tf.global_variables_initializer()
-                sess.run(init)
+                        np.random.seed(8)
 
-                np.random.seed(8)
+                        time_feed = generate_t(T, steps, M)
+                        start_time = ttt.time()
 
-                time_feed = generate_t(T, steps, M)
-                start_time = ttt.time()
+                        for it in range(Epoch):
+                            seed = ( it % 100 ) + run
+                            path_feed =  Create_paths(seed, M)
+                            feed_dict = {path: path_feed, time: time_feed}
+                            sess.run(train_op, feed_dict)
 
-                for it in range(Epoch):
-                    seed = ( it % 100 ) + run
-                    path_feed =  Create_paths(seed, M)
-                    feed_dict = {path: path_feed, time: time_feed}
-                    sess.run(train_op, feed_dict)
+                        elapsed = ttt.time() - start_time
+                        loss_value = sess.run(loss, feed_dict)
+                        lr = sess.run(learning_rate)
+                        solution_pred= sess.run([solution], feed_dict)
+                        print("session {}, dimension is {}, predicted solution is {}, loss is {}, and learning rate is {}, \
+                                elapsed is {}.\n".format(run, d, solution_pred[0][0][0], loss_value, lr, elapsed))
 
-                elapsed = ttt.time() - start_time
-                loss_value = sess.run(loss, feed_dict)
-                lr = sess.run(learning_rate)
-                solution_pred= sess.run([solution], feed_dict)
-                print("session {}, dimension is {}, predicted solution is {}, loss is {}, and learning rate is {}, \
-                        elapsed is {}.\n".format(run, d, solution_pred[0][0][0], loss_value, lr, elapsed))
-
-                _file.write('%i, %f, %i, %i, %f, %f\n'
-                            % (d, T, steps, run, solution_pred[0][0][0], elapsed))
-                _file.flush()
+                        _file.write('%i, %f, %i, %i, %f, %f, %f, %f\n'
+                                    % (d, T, steps, run, K, B, solution_pred[0][0][0], elapsed))
+                        _file.flush()

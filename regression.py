@@ -241,10 +241,10 @@ for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaol
                         y0 = simulate('semilinear_var_reduction', T, N, d, sde, phi, f, batch_size, K=K, B=B)
                     t_1 = time.time()
 
-                    _file.write('%i, %f, %i, %i, %f, %f\n'
-                                % (d, T, N, run, y0[0,0], t_1 - t_0))
+                    _file.write('%i, %f, %i, %i, %f, %f, %f, %f\n'
+                                % (d, T, N, run, K, B, y0[0,0], t_1 - t_0))
                     _file.flush()
-                    print(d, T, N, run, y0[0,0], t_1 - t_0)
+                    print(d, T, N, run, K, B, y0[0,0], t_1 - t_0)
 
     _file.close()
 
@@ -265,9 +265,9 @@ for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaol
                         y0 = simulate('semilinear', T, N, d, sde, phi, f, batch_size, K=K, B=B)
                     t_1 = time.time()
 
-                    _file.write('%i, %f, %i, %i, %f, %f\n'
-                                % (d, T, N, run, y0[0,0], t_1 - t_0))
+                    _file.write('%i, %f, %i, %i, %f, %f, %f, %f\n'
+                                % (d, T, N, run, K, B, y0[0,0], t_1 - t_0))
                     _file.flush()
-                    print(d, T, N, run, y0[0,0], t_1 - t_0)
+                    print(d, T, N, run, K, B, y0[0,0], t_1 - t_0)
 
     _file.close()
