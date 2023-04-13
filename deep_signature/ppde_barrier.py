@@ -109,8 +109,8 @@ if __name__ == "__main__":
         _file.write('d,T,N,run,K,B,y0,runtime\n')
 
         # for each strike and barrier
-        for K in [47]:# [47, 52]:
-            for B in [53]: #[46, 53]:
+        for K in [47, 52]:
+            for B in [46, 53]:
                 for run in range(1): #range(10):
                     np.random.seed(run)
 
