@@ -1,4 +1,20 @@
 # Deep PPDE solver
+
+Update: To run this modified repository on Google Colab, run the following commands. Output files are stored in the logs folder and results may or may not be exactly reproducible depending on the GPU assigned.
+
+```
+!git clone https://github.com/ng-cheng-en-matthew/deep_ppde_fn6905
+!pip install signatory
+!pip install munch
+
+%cd deep_ppde_fn6905
+
+!python main.py
+!python deep_galerkin.py
+!python regression.py
+!python deep_signature/ppde_barrier.py
+```
+
 Authors: Jiang Yu Nguwi and Nicolas Privault.
 
 If this code is used for research purposes, please cite as \
