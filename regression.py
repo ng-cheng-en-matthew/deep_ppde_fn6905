@@ -248,7 +248,7 @@ for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaol
 
     _file.close()
 
-for which_type in ['xiolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
+for which_type in ['xiaolu_barrier']: #[ 'xiaolu_asian', 'xiaolu_barrier', 'xiaolu_control' ]:
     _file = open(f'logs/no_var_reduction_{which_type}_T_{T}.csv', 'w')
     _file.write('d,T,N,run,y0,runtime\n')
     print(which_type)
