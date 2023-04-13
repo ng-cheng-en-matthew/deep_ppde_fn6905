@@ -15,8 +15,15 @@ class BaseOption:
 
 class Barrier(BaseOption):
 
-    def __init__(self, idx_traded: List[int]=None):
+    def __init__(self, idx_traded: List[int]=None, **kwargs):
         self.idx_traded = idx_traded # indices of traded assets. If None, then all assets are traded
+
+        #self.x_init = kwargs.get('x_init', 50)
+        #self.sig = kwargs.get('sig', 0.2)
+        #self.r = kwargs.get('r', 0.01)
+        self.K = kwargs.get('K', 47)
+        self.B = kwargs.get('B', 53)
+
 
     def payoff(self, x):
         """
@@ -33,8 +40,8 @@ class Barrier(BaseOption):
             basket = torch.mean(x[..., self.idx_traded],2) # (batch_size, N)
         else:
             basket = torch.mean(x,2) # (batch_size, N)
-            reduced_term = basket[:,-1] - 0.7 # (batch_size)
-            up_flag = 1.2 - torch.max(basket, 1)[0] # (batch_size)
+            reduced_term = basket[:,-1] - self.K # (batch_size)
+            up_flag = self.B - torch.max(basket, 1)[0] # (batch_size)
         payoff = torch.where(torch.logical_and(up_flag > 0, reduced_term > 0), reduced_term, torch.zeros_like(reduced_term))
         return payoff.unsqueeze(1) # (batch_size, 1)
 
@@ -43,6 +50,8 @@ class Asian(BaseOption):
     def __init__(self, idx_traded: List[int]=None):
         self.idx_traded = idx_traded # indices of traded assets. If None, then all assets are traded
 
+
+
     def payoff(self, x):
         """
         Parameters
@@ -57,15 +66,20 @@ class Asian(BaseOption):
         if self.idx_traded:
             basket = torch.mean(x[..., self.idx_traded],2) # (batch_size, N)
         else:
-            basket = torch.mean(x,2) # (batch_size, N)
+            basket = torch.mean(x, 2) # (batch_size, N)
             basket = torch.mean(basket,1) - 0.7 # (batch_size)
         payoff = torch.where(basket>0, basket, torch.zeros_like(basket))
         return payoff.unsqueeze(1) # (batch_size, 1)
 
 class Lookback(BaseOption):
 
-    def __init__(self, idx_traded: List[int]=None):
+    def __init__(self, idx_traded: List[int]=None, **kwargs):
         self.idx_traded = idx_traded # indices of traded assets. If None, then all assets are traded
+
+        #self.x_init = kwargs.get('x_init', 50)
+        #self.sig = kwargs.get('sig', 0.2)
+        #self.r = kwargs.get('r', 0.01)
+        self.option_type = kwargs.get('option_type', 'call')
 
     def payoff(self, x):
         """
@@ -81,8 +95,11 @@ class Lookback(BaseOption):
         if self.idx_traded:
             basket = torch.sum(x[..., self.idx_traded],2) # (batch_size, N)
         else:
-            basket = torch.sum(x,2) # (batch_size, N)
-        payoff = torch.max(basket, 1)[0]-basket[:,-1] # (batch_size)
+            basket = torch.sum(x, 2) # (batch_size, N)
+
+        payoff = ((basket[:,-1]-torch.min(basket, 1)[0]) if self.option_type=='call'
+                  else (torch.max(basket, 1)[0]-basket[:,-1])) # (batch_size)
+
         return payoff.unsqueeze(1) # (batch_size, 1)
 
 
